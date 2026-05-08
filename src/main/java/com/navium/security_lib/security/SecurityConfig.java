@@ -3,11 +3,15 @@ package com.navium.security_lib.security;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import java.util.List;
 
 /**
     Configuración de seguridad para la aplicación.
@@ -31,6 +35,9 @@ public class SecurityConfig {
     @Autowired
     private JwtAuthorizationFilter jwtAuthorizationFilter;
 
+    @Autowired(required = false)
+    private List<Customizer<AuthorizeHttpRequestsConfigurer.AuthorizationManagerRequestMatcherRegistry>> authorizeCustomizers;
+
     /**
         Configura la cadena de filtros de seguridad HTTP.
         Define cuáles rutas son públicas y cuáles requieren autenticación.
@@ -42,6 +49,9 @@ public class SecurityConfig {
             Declara rutas públicas (Swagger UI)
             Declara rutas protegidas (API de contenedores)
             Registra el filtro JWT antes del filtro estándar de Spring
+
+        Nota: los claims "rol"/"roles" se mapean a authorities sin prefijo ROLE_;
+        en servicios consumidores usa hasAuthority("ROL_OPERADOR") u otros valores del claim.
      */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -55,24 +65,32 @@ public class SecurityConfig {
             // SessionCreationPolicy.STATELESS indica que no habrá HttpSession
             // Esto es necesario para APIs RESTful con autenticación JWT
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                
+            .authorizeHttpRequests(auth -> {
+
                 // ====== RUTAS PÚBLICAS (SIN AUTENTICACIÓN) ======
                 // Dejamos públicas las rutas de Swagger para ver la documentación
                 // Esto permite que terceros visualicen los endpoints disponibles
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll();
+
+                // Optional extension point: services can add role-based rules with hasAuthority.
+                // Provide a Customizer<AuthorizeHttpRequestsConfigurer.AuthorizationManagerRequestMatcherRegistry> bean.
+                if (authorizeCustomizers != null) {
+                    for (Customizer<AuthorizeHttpRequestsConfigurer.AuthorizationManagerRequestMatcherRegistry> customizer : authorizeCustomizers) {
+                        customizer.customize(auth);
+                    }
+                }
                 
                 // ====== RUTAS PROTEGIDAS (REQUIEREN TOKEN JWT) ======
                 // Se EXIGE TOKEN para cualquier petición a APIs
                 // El cliente debe incluir: Authorization: Bearer <token>
                 // Nota: En caso de necesitar un endpoint especifico publico: .requestMatchers(HttpMethod.GET, "/api/v0/andenes/disponibles").permitAll()
-                .requestMatchers("/api/contenedores/**").authenticated()
-                .requestMatchers("/api/v0/andenes/**").authenticated()
-                
+                auth.requestMatchers("/api/contenedores/**").authenticated();
+                auth.requestMatchers("/api/v0/andenes/**").authenticated();
+
                 // Por defecto, todas las demás rutas requieren autenticación
                 // Este es un enfoque de seguridad "deny-by-default" (denegar por defecto)
-                .anyRequest().authenticated()
-            )
+                auth.anyRequest().authenticated();
+            })
 
             // Registra el filtro JWT antes del filtro estándar de Spring
             // Orden de ejecución:

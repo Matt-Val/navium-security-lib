@@ -9,13 +9,20 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 
 /*
@@ -91,11 +98,12 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
                 // Extrae el username del token (subject)
 
                 String username = claims.getSubject();
+                List<GrantedAuthority> authorities = buildAuthorities(claims);
 
                 // Si todo está bien, le da acceso a Spring Boot
                 if (username != null) {
                     // Crea el token de autenticación sin credenciales
-                    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(username, null, Collections.emptyList());
+                    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(username, null, authorities);
                     // Asigna la autenticación al contexto de seguridad de Spring
                     SecurityContextHolder.getContext().setAuthentication(auth);
                 }
@@ -109,5 +117,66 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
         }
         // Continúa con la cadena de filtros (procesa la solicitud)
         filterChain.doFilter(request, response);
+    }
+
+    private List<GrantedAuthority> buildAuthorities(Claims claims) {
+        Set<String> roleNames = new LinkedHashSet<>();
+        addRoles(roleNames, claims.get("rol"));
+        addRoles(roleNames, claims.get("roles"));
+
+        if (roleNames.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<GrantedAuthority> authorities = new ArrayList<>(roleNames.size());
+        for (String roleName : roleNames) {
+            if (roleName == null) {
+                continue;
+            }
+            String trimmed = roleName.trim();
+            if (!trimmed.isEmpty()) {
+                authorities.add(new SimpleGrantedAuthority(trimmed));
+            }
+        }
+        return authorities;
+    }
+
+    private void addRoles(Set<String> roleNames, Object claimValue) {
+        if (claimValue == null) {
+            return;
+        }
+        if (claimValue instanceof String) {
+            addRoleString(roleNames, (String) claimValue);
+            return;
+        }
+        if (claimValue instanceof Collection<?>) {
+            for (Object item : (Collection<?>) claimValue) {
+                if (item != null) {
+                    addRoleString(roleNames, item.toString());
+                }
+            }
+            return;
+        }
+        addRoleString(roleNames, claimValue.toString());
+    }
+
+    private void addRoleString(Set<String> roleNames, String value) {
+        if (value == null) {
+            return;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return;
+        }
+        if (trimmed.contains(",")) {
+            for (String part : trimmed.split(",")) {
+                String partTrimmed = part.trim();
+                if (!partTrimmed.isEmpty()) {
+                    roleNames.add(partTrimmed);
+                }
+            }
+            return;
+        }
+        roleNames.add(trimmed);
     }
 }
