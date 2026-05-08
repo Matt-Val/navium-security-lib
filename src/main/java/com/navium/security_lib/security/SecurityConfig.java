@@ -63,9 +63,11 @@ public class SecurityConfig {
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                 
                 // ====== RUTAS PROTEGIDAS (REQUIEREN TOKEN JWT) ======
-                // Se EXIGE TOKEN para cualquier petición a nuestra API de contenedores
+                // Se EXIGE TOKEN para cualquier petición a APIs
                 // El cliente debe incluir: Authorization: Bearer <token>
+                // Nota: En caso de necesitar un endpoint especifico publico: .requestMatchers(HttpMethod.GET, "/api/v0/andenes/disponibles").permitAll()
                 .requestMatchers("/api/contenedores/**").authenticated()
+                .requestMatchers("/api/v0/andenes/**").authenticated()
                 
                 // Por defecto, todas las demás rutas requieren autenticación
                 // Este es un enfoque de seguridad "deny-by-default" (denegar por defecto)
