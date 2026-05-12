@@ -3,6 +3,7 @@ package com.navium.security_lib.security;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -59,6 +60,7 @@ public class SecurityConfig {
             // Desactivamos CSRF porque usaremos JWT
             // La protección CSRF es necesaria solo cuando usamos cookies de sesión
             // Con JWT en headers, no es vulnerable a CSRF
+            .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf.disable())
             
             // No guardamos sesiones, cada petición debe traer su token
@@ -71,6 +73,8 @@ public class SecurityConfig {
                 // Dejamos públicas las rutas de Swagger para ver la documentación
                 // Esto permite que terceros visualicen los endpoints disponibles
                 auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll();
+
+                auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
 
                 // Optional extension point: services can add role-based rules with hasAuthority.
                 // Provide a Customizer<AuthorizeHttpRequestsConfigurer.AuthorizationManagerRequestMatcherRegistry> bean.
@@ -85,6 +89,7 @@ public class SecurityConfig {
                 // El cliente debe incluir: Authorization: Bearer <token>
                 // Nota: En caso de necesitar un endpoint especifico publico: .requestMatchers(HttpMethod.GET, "/api/v0/andenes/disponibles").permitAll()
                 auth.requestMatchers("/api/contenedores/**").authenticated();
+                auth.requestMatchers("/api/agendamientos/**").authenticated();
                 auth.requestMatchers("/api/v0/andenes/**").authenticated();
 
                 // Por defecto, todas las demás rutas requieren autenticación
