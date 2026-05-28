@@ -5,6 +5,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,21 +31,21 @@ import java.util.Set;
 
     Responsabilidades:
         Intercepta cada solicitud http que llega.
-        Extrae el token JWT del header Authorization (Bearer)
+        Extrae el token JWT del header Authorization (Bearer) o de una Cookie HttpOnly.
         Valida que el token sea válido usando la llave secreta
         Extrae información del usuario del token (Claims)
         Configura el contexto de seguridad de Spring si el token es válido
         Bloquea el acceso si el token es inválido o ha expirado.
 
     Flujo de Validación:
-        Busca el header de Authorization en la solicitud
-        Si existe y comienza con "Bearer" y extrae ese token
-        Intenta validar el token usando la llave secreta
-        En caso de que sea válido:
+        1. Busca el token en el header "Authorization" (Bearer <token>)
+        2. Si no lo encuentra, busca el token en una Cookie llamada "token"
+        3. Si existe, intenta validar el token usando la llave secreta
+        4. En caso de que sea válido:
             Extrae el username del token
             Crea un objeto de autenticación de Spring Security
             Le asigna al contexto de seguridad
-        En caso de que NO sea válido:
+        5. En caso de que NO sea válido o no exista:
             Limpia el contexto (bloquea el acceso)
             Continúa con la cadena de filtros
 */
@@ -73,15 +74,9 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
     */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        //Obtiene el header "Authorization"
-        // Formato esperado: "Bearer <Token>"
-        String header = request.getHeader("Authorization");
+        String token = recoverToken(request);
 
-        // Solo procesa cuando el header ya existe y comienza con "Bearer"
-        if (header != null && header.startsWith("Bearer ")) {
-
-            // Extrae el token eliminando el "Bearer"
-            String token = header.replace("Bearer ", "");
+        if (token != null) {
             try {
                 // --- VALIDACIONES DEL TOKEN ---
                 // Revisa si la llave encaja con la llave secreta
@@ -117,6 +112,30 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
         }
         // Continúa con la cadena de filtros (procesa la solicitud)
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Recupera el token de la solicitud, buscando primero en el header Authorization
+     * y luego en las cookies.
+     */
+    private String recoverToken(HttpServletRequest request) {
+        // 1. Intentar desde el Header (Bearer)
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.replace("Bearer ", "");
+        }
+
+        // 2. Intentar desde las Cookies
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("token".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+
+        return null;
     }
 
     private List<GrantedAuthority> buildAuthorities(Claims claims) {
