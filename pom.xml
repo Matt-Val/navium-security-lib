@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.navium</groupId>
     <artifactId>navium-security-lib</artifactId>
-    <version>1.1.1</version>
+    <version>1.1.2-SNAPSHOT</version>
 	<name/>
 	<description/>
 	<url/>
